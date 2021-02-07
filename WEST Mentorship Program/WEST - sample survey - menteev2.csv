@@ -1,0 +1,6 @@
+question,option,input_type,input_id,dependence,dependence_value,required
+Enter your name,,text,name,NA,NA,TRUE
+Enter your age,,numeric,age,NA,NA,TRUE
+What's your highest education,Bachelor's,mc,education,NA,NA,TRUE
+What's your highest education,Master's,mc,education,NA,NA,TRUE
+What's your highest education,Doctorate,mc,education,NA,NA,TRUE
