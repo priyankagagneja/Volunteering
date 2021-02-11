@@ -8,6 +8,9 @@ pacman::p_load(reshape2, dplyr, survey, purrr, tidyr)
 max_mentees = 3
 min_mentees = 1
 
+# Set skill for modules A, B, etc.
+module_skill = "Sk1" # Read this in from Shiny app and output the final matching for Module A, B based on varying inputs.
+
 #### DATA PREP PHASE ####
 
 ## Read in data
@@ -71,7 +74,7 @@ table(marginal_probs$Ranking, marginal_probs$probs) ## Sanity check
 
 
 mentor.df = mentor_long %>%
-  filter(Ranking==1) %>%
+  filter(Ranking==1 & Skill == module_skill) %>%
   mutate(Mentor.Name = as.character(Mentor.Name)) %>%
   select(-Ranking)
 
@@ -123,7 +126,7 @@ match.df = new_long_mod %>%
   
 
 # Pre-allocate space in a final matching dataframe
-final_matches = data.frame(matrix(ncol = 5, nrow = max_mentees))
+final_matches = data.frame(matrix(ncol = length(unique_mentors), nrow = max_mentees))
 colnames(final_matches) = c(unique_mentors)
 
 
@@ -132,8 +135,10 @@ colnames(final_matches) = c(unique_mentors)
   mentees_placed = 0 # No one placed yet
   data = match.df
 
-  mentor = data$Mentor.Name[data$adj_match == max(data$adj_match)] # Return first mentor
-  mentee = data$Mentee.Name[data$adj_match == max(data$adj_match)] # Return first mentee
+  data = data[order(data$adj_match, decreasing = T),]
+  
+  mentor = first(data$Mentor.Name) # Return first mentor
+  mentee = first(data$Mentee.Name) # Return first mentee
   
   col = as.numeric(which(names(final_matches)==mentor)) # Identify the column of the mentor we're matching  
   row = 1 # First row, as we are initializing.
