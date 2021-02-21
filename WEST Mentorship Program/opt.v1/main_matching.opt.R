@@ -1,5 +1,4 @@
-setwd("~/Desktop/mentor_optimization")
-.libPaths( c("~/rlibraries", .libPaths()))
+
 
 ## Read in needed libraries
 pacman::p_load(reshape2, dplyr, survey, purrr, tidyr)
@@ -8,14 +7,17 @@ pacman::p_load(reshape2, dplyr, survey, purrr, tidyr)
 max_mentees = 3
 min_mentees = 1
 
+
 # Set skill for modules A, B, etc.
+# FEEDBACK : For a given module, we want to work with all the skills possible (when the mentors are available and mentees are looking)
+#            instead of taking this as input can we add in the group by's instrad ?
 module_skill = "Sk1" # Read this in from Shiny app and output the final matching for Module A, B based on varying inputs.
 
 #### DATA PREP PHASE ####
 
 ## Read in data
-mentor = read.csv("mentor_skills.csv", stringsAsFactors = F)
-mentee = read.csv("mentee_skills.csv", stringsAsFactors = F)
+mentor = read.csv("./WEST Mentorship Program/opt.v1/mentor_skills.csv", stringsAsFactors = F)
+mentee = read.csv("./WEST Mentorship Program/opt.v1/mentee_skills.csv", stringsAsFactors = F)
 
 # Correct for an irregularities in the randomly generated data
 mentee[7,9] = 2 
@@ -27,15 +29,16 @@ mentor = mentor[1:5,]
 
 ## Reshape datafiles
 mentor_long = reshape2::melt(mentor, id.vars = 'Mentor.Name')
-colnames(mentor_long) = c("Mentor.Name","Skill.SubSkill","Ranking")
-mentor_long$Skill.SubSkill  = as.character(mentor_long$Skill.SubSkill)
-mentor_long$Skill = substr(mentor_long$Skill.SubSkill, 1, 3)
+colnames(mentor_long) = c("Mentor.Name","Skill","Ranking")
+mentor_long$Skill  = as.character(mentor_long$Skill)
+mentor_long$Topic = substr(mentor_long$Skill, 1, 3)
 
 
 mentee_long = reshape2::melt(mentee, id.vars = 'Mentee.Name')
-colnames(mentee_long) = c("Mentee.Name","Skill.SubSkill","Ranking")
-mentee_long$Skill.SubSkill  = as.character(mentee_long$Skill.SubSkill)
-mentee_long$Skill = substr(mentee_long$Skill.SubSkill, 1, 3)
+colnames(mentee_long) = c("Mentee.Name","Skill","Ranking")
+mentee_long$Skill  = as.character(mentee_long$Skill)
+mentee_long$Topic = substr(mentee_long$Skill, 1, 3)
+# UPDATE: Renamed all fields named 'Skill' to 'Topic' & 'Skill.SubSkill' to 'Skill'
 
 # Check that ranking Rankings are unique within mentees' main skill categories
 
@@ -45,26 +48,29 @@ marginal_prob_function = function(df) {
   ## A simple function to assign weighting 
   ## to rankings in a reverse manner. 
   ## Accepts a dataframe with unique
-  ## or non-unique column Rankings, and returns 
+  ## or non-unique column Rankings, and 
+  ## returns a dataframe with
   ## the weights in reverse order.
   
   df$probs = rev((df$Ranking)/sum(df$Ranking))
 
   return(df)
 }
+# UPDATE: Added a line in the comments
 
 
 ## Create marginal probabilities per mentee
 # This is a separate dataframe which will be merged in later.
 marginal_probs = mentee_long %>%
+  # FEEDBACK : both the filter conditions look the same. Also you might want to do if(!is.na(Ranking)) to filter for all ranked values.
   filter(Ranking!="NA" & Ranking!="NA") %>%
-  group_by(Mentee.Name, Skill) %>%
+  group_by(Mentee.Name, Topic) %>%
   arrange(Ranking) %>%
   nest() %>%
   mutate(map(data, marginal_prob_function)) %>%
   unnest() %>%
   ungroup() %>%
-  select(Mentee.Name, Skill, Skill.SubSkill, Ranking, probs)
+  select(Mentee.Name, Topic, Skill, Ranking, probs)
 
 table(marginal_probs$Ranking, marginal_probs$probs) ## Sanity check 
 # In the above table, rank 4 should only have probs = 0.1 
@@ -73,12 +79,13 @@ table(marginal_probs$Ranking, marginal_probs$probs) ## Sanity check
 # Rank 2 may take on probs = c(0.4, 0.5)
 
 
+# FEEDBACK : Based on the above feedback, the filter(Topic == module_skill) here will go away and a group_by might be needed instead.
 mentor.df = mentor_long %>%
-  filter(Ranking==1 & Skill == module_skill) %>%
+  filter(Ranking==1 & Topic == module_skill) %>%
   mutate(Mentor.Name = as.character(Mentor.Name)) %>%
   select(-Ranking)
 
-colnames(mentor.df) = c("Mentor.Name","Mentor.Skills","Skill")
+colnames(mentor.df) = c("Mentor.Name","Mentor.Skills","Topic")
 
 unique_mentees  = as.character(unique(mentee_long$Mentee.Name))
 unique_mentors  = as.character(unique(mentor_long$Mentor.Name))
@@ -90,30 +97,31 @@ match[c(1:2)] = sapply(match[c(1:2)], function(x) as.character(x)) # Make sure t
 
 
 new_long = merge(mentee_long, match, by = "Mentee.Name", all = T) # Expand out the mentee skill ranking set by all possible mentor matches.
-new_long  = merge(new_long, mentor.df, by = c("Mentor.Name","Skill"), all = T) # Add in the mentor skills to the new expanded dataframe.
+new_long  = merge(new_long, mentor.df, by = c("Mentor.Name","Topic"), all = T) # Add in the mentor skills to the new expanded dataframe.
 
 
 new_long_mod = new_long %>%
-  filter(Ranking!="NA") %>%
-  group_by(Mentee.Name, Skill) %>%
+  # filter(Ranking!="NA") %>%
+  filter(!is.na(Ranking)) %>%
+  group_by(Mentee.Name, Topic) %>%
   mutate(n_skills_cat = length(unique(Ranking))) %>% # Calculate the number of requested skills by category
-  group_by(Mentee.Name, Mentor.Name, Skill, Ranking) %>%
-  mutate(n_matches = sum(Skill.SubSkill == Mentor.Skills)) %>% # Number of matching unique skills between mentee + mentor
+  group_by(Mentee.Name, Mentor.Name, Topic, Ranking) %>%
+  mutate(n_matches = sum(Skill == Mentor.Skills)) %>% # Number of matching unique skills between mentee + mentor
   ungroup()
 
 
-new_long_mod = merge(new_long_mod, marginal_probs, by = c("Mentee.Name","Skill","Ranking"), all = T)  # Merge weighting scheme
+new_long_mod = merge(new_long_mod, marginal_probs, by = c("Mentee.Name","Topic","Ranking"), all = T)  # Merge weighting scheme
 
 #Now weight the number of matches 
 
 match.df = new_long_mod %>%
   mutate(weighted_match = probs * n_matches) %>%
-  group_by(Mentee.Name, Mentor.Name, Skill) %>% 
+  group_by(Mentee.Name, Mentor.Name, Topic) %>% 
   mutate(sum_probs_cat = sum(weighted_match)) %>% # Total weighted matches by category
   slice(n=1) %>%
   group_by(Mentee.Name, Mentor.Name) %>%
   mutate(total_match = sum(sum_probs_cat, na.rm = T)) %>% #Total weighted matches over all categories, by mentee and mentor.
-  group_by(Mentee.Name, Mentor.Name, Skill) %>%
+  group_by(Mentee.Name, Mentor.Name, Topic) %>%
   slice(n=1) %>%
   ungroup() %>%
   group_by(Mentee.Name, Mentor.Name) %>%
