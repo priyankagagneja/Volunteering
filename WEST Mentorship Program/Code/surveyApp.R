@@ -1,14 +1,16 @@
 ###
-### This shiny app generates the sample survey & is able to save the results in a googlesheet.
+### This shiny app generates the sample survey & is able to save 
+### the results in a googlesheet.
 ###
 
 library(shiny)
 library(shinysurveys)
 library(googlesheets4)
 
-dfsurvey <- read.csv("./WEST-sample survey-mentee.csv")
-dfsurvey$option <- ifelse(dfsurvey$input_type == "numeric",20,dfsurvey$option)
-
+print(getwd())
+dfsurvey <- read.csv("./../Data/WEST - Mentorship Survey - Feb 2021.csv")
+dfsurvey <- dfsurvey[c(-11,-21),]
+    
 gs4_auth(
     email = gargle::gargle_oauth_email(),
     path = NULL,
@@ -22,28 +24,30 @@ gs4_auth(
 ui <- fluidPage(
     # Application title
     titlePanel("Mentee Survey"),
-    mainPanel(
+    mainPanel( 
         surveyOutput(df = dfsurvey),
         tableOutput("responseResults")
     )
 )
+
 # Define server logic required to draw a histogram
 server <- function(input, output) {
     renderSurvey(df = dfsurvey)
     # Create a df and then allow for the responses to be downloaded.
     Data = eventReactive( input$submit , {
-        df <- data.frame(name=input$name, 
-                         age=input$age, 
-                         education = input$education)
+        df <- data.frame(input$name, input$topic1, input$topic2,  input$feedback  )
         
         # Submit & Save the response on the googlesheets file
-        sheet_append("https://docs.google.com/spreadsheets/d/13CNixY838ZjryizUiGp_O9boox_8KqrF0REpSNmCKH4/edit#gid=0", df, sheet = 1)
+        sheet_append("https://docs.google.com/spreadsheets/d/1AJU6m2w8QF4Dup_JhFwjkmQYMnXdz9RnP1kzv_ypvJY/edit#gid=0",
+                     df, sheet = 1)
         
         return(list(df=df))
     })
-    output$responseResults <- renderTable({  
+    
+    output$responseResults <- renderTable({
+        
         # Display the current values on the web browser
-        print(Data()$df) 
+        print(Data()$df)
         
         })
 }
