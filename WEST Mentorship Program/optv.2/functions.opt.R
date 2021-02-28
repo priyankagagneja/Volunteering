@@ -318,7 +318,7 @@ find_ideal_module = function(x1, x2, n_topics) {
   df = cbind(exp1, exp2)
   rownames(df) = NULL
   df[,1:ncol(df)] = sapply(df[,1:ncol(df)], function(x) FUN = as.character(x)) # format as character
-  colnames(df) = c('sk1','sk2','sk3','sk4','sk5','sk6')
+  colnames(df) = paste("sk",seq(1:n_topics),sep="")
   
   #df$count <- apply(df[,1:6], 1, function(x) length(unique(x)))
   
@@ -327,8 +327,8 @@ find_ideal_module = function(x1, x2, n_topics) {
 
   for(i in 1:nrow(df)){
       
-      t1 = as.character(unlist(c(df[i,1:3])))
-      t2 = as.character(unlist(c(df[i,4:6])))
+      t1 = as.character(unlist(c(df[i,1:(n_topics/2)])))
+      t2 = as.character(unlist(c(df[i,((n_topics/2)+1):n_topics])))
 
       freq1 = data.frame(table(x1))
       n_mod1 = freq1 %>% mutate(x1 = as.character(x1)) %>% 
@@ -365,7 +365,7 @@ find_ideal_module = function(x1, x2, n_topics) {
   
 }
 
-define_modules_v2 = function(module_topics, topics1, topics2) {
+define_modules_v2 = function(mod_topic_df, topics1, topics2) {
   
   ## This function depends on the output of the previous function.
   # The functions do not need to be run independently.
@@ -379,7 +379,7 @@ define_modules_v2 = function(module_topics, topics1, topics2) {
   
   df1 = df1 %>% 
     mutate(topics = as.character(topics1)) %>%
-  arrange(desc(Freq)) %>% filter(topics %in% module_topics$topic[module_topics$mod=="Module1"]) %>%
+  arrange(desc(Freq)) %>% filter(topics %in% mod_topic_df$topic[mod_topic_df$mod=="Module1"]) %>%
     select(topics, count = Freq)
   df1$mod = "Module1"
   
@@ -399,10 +399,12 @@ define_modules_v2 = function(module_topics, topics1, topics2) {
   # Will this number of rooms accomodate all mentees? 
   
   current_assigned = sum(rooms_mod1$rooms) * max_mentees
+  
+  if(current_assigned < nrow(mentee)){ # If we still need more rooms ... 
   not_assigned = nrow(mentee) - current_assigned
   n_rooms_needed = ceiling(not_assigned / max_mentees) # how many more rooms are necessary?
   
-  additional_rooms = sample(module_topics$topic[module_topics$mod=="Module1"], n_rooms_needed, replace = T)
+  additional_rooms = sample(mod_topic_df$topic[mod_topic_df$mod=="Module1"], n_rooms_needed, replace = T)
   additional_rooms = data.frame(table(additional_rooms))
   additional_rooms$topic = as.character(additional_rooms$additional_rooms)
   
@@ -413,13 +415,18 @@ define_modules_v2 = function(module_topics, topics1, topics2) {
     mutate(final_rooms = rooms + Freq) %>%
     ungroup() %>%
     select(topic, final_rooms) 
-  
+  } else { # Else prepare the final room numbers.
+    
+    rooms_mod1$final_rooms = rooms_mod1$rooms
+    rooms_mod1 = subset(rooms_mod1, select = c('topic','final_rooms'))  
+  }
+    
   ## Now run the assignments for module 2
   df2 = as.data.frame(table(topics2))
   
   df2 = df2 %>% 
     mutate(topics = as.character(topics2)) %>%
-    arrange(desc(Freq)) %>% filter(topics %in% module_topics$topic[module_topics$mod=="Module2"]) %>%
+    arrange(desc(Freq)) %>% filter(topics %in% mod_topic_df$topic[mod_topic_df$mod=="Module2"]) %>%
     select(topics, count = Freq)
   df2$mod = "Module2"
   
@@ -439,10 +446,12 @@ define_modules_v2 = function(module_topics, topics1, topics2) {
   # Will this number of rooms accomodate all mentees? 
   
   current_assigned = sum(rooms_mod2$rooms) * max_mentees
+  
+  if(current_assigned < nrow(mentee)){ # If we still need more rooms ... 
   not_assigned = nrow(mentee) - current_assigned
   n_rooms_needed = ceiling(not_assigned / max_mentees) # how many more rooms are necessary?
   
-  additional_rooms = sample(module_topics$topic[module_topics$mod=="Module2"], n_rooms_needed, replace = T)
+  additional_rooms = sample(mod_topic_df$topic[mod_topic_df$mod=="Module2"], n_rooms_needed, replace = T)
   additional_rooms = data.frame(table(additional_rooms))
   additional_rooms$topic = as.character(additional_rooms$additional_rooms)
   
@@ -453,7 +462,12 @@ define_modules_v2 = function(module_topics, topics1, topics2) {
     mutate(final_rooms = rooms + Freq) %>%
     ungroup() %>%
     select(topic, final_rooms) 
-  
+  } else { # Else move on
+    
+    rooms_mod2$final_rooms = rooms_mod2$rooms
+    rooms_mod2 = subset(rooms_mod2, select = c('topic','final_rooms')) 
+    
+  }
   # Generate final module with breakout rooms
   
   module1 = data.frame(topic = rep(rooms_mod1$topic, times = rooms_mod1$final_rooms))
@@ -481,8 +495,6 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
   modules_defined$mod = as.character(modules_defined$mod)
   mod1topics = unique(modules_defined$topic[modules_defined$mod=="Module1"])
   mod2topics = unique(modules_defined$topic[modules_defined$mod=="Module2"]) 
-  
-  unique_rankings = unique(mentor_pref_df$sum_ranking)
   
   ## Now assign skills to each mentor for each module
   
@@ -513,21 +525,23 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
   combos = combinations(length(combined_mentors), min_mentors, v=combined_mentors, repeats.allowed=FALSE)
   combos = data.frame(combos)
   combos[,1:ncol(combos)] = sapply(combos[,1:ncol(combos)], function(x) FUN = as.character(x))
-  colnames(combos) = c('mentor1','mentor2','mentor3','mentor4','mentor5','mentor6','mentor7','mentor8','mentor9')
+  colnames(combos) = paste("mentor",seq(1:min_mentors),sep="")
   
-  topics = expand.grid(mod1topics, mod2topics)
-  topics[,1:ncol(topics)] = sapply(topics[,1:ncol(topics)], function(x) FUN = as.character(x))
-  colnames(topics) = c('Module1_SK','Module2_SK')
+  
+  bo_rooms = data.frame(Module1_BR = modules_defined$breakout_room[modules_defined$mod=="Module1"],
+                        Module2_BR = modules_defined$breakout_room[modules_defined$mod=="Module2"],
+                        Module1_SK = modules_defined$topic[modules_defined$mod=="Module1"],
+                        Module2_SK = modules_defined$topic[modules_defined$mod=="Module2"])
+  bo_rooms[,3:ncol(bo_rooms)] = sapply(bo_rooms[,3:ncol(bo_rooms)], function(x) FUN = as.character(x))
 
-  
   # Go through and find the best combination of mentors for both modules, and assign to breakout room.
   
-  exp1 = topics[rep(1:nrow(topics), times = nrow(combos)),]
-  exp2 = combos[rep(1:nrow(combos), each = nrow(topics)),] 
+  exp1 = bo_rooms[rep(1:nrow(bo_rooms), times = nrow(combos)),]
+  exp2 = combos[rep(1:nrow(combos), each = nrow(bo_rooms)),] 
   df = cbind(exp1, exp2)
   rownames(df) = NULL
-  colnames(df)[1:2] = c('Module1_SK','Module2_SK')
-  df$combo = rep(seq(1,nrow(combos), by = 1), each = nrow(topics))
+  #colnames(df)[1:2] = c('Module1_SK','Module2_SK')
+  df$combo = rep(seq(1,nrow(combos), by = 1), each = nrow(bo_rooms))
   df$mentor1_rank = NA
   df$mentor2_rank = NA
   df$mentor3_rank = NA
@@ -539,14 +553,14 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
   df$mentor9_rank = NA
   
   # Now go through and test each set of 9 mentors for appropriateness of each module.
-  # There are 9 unique possible combinations of topics breakout room configurations. 
+  # There are n unique possible combinations of topics breakout room configurations. 
   
     
   for(i in 1:nrow(df)){ # This will take awhile to run through.
     
-    next_skills = as.character(df[i,1:2])
+    next_skills = as.character(df[i,3:4])
     
-    for(j in 3:11) {
+    for(j in 5:(n_mentors+4)) {
       
       next_mentor = df[i,j]
       
@@ -558,7 +572,7 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
         slice(n=1) %>%
         select(skill_rank)
         
-    df[i,j+10] = as.numeric(Skills_Rank$skill_rank)  
+    df[i,j+(n_mentors+1)] = as.numeric(Skills_Rank$skill_rank)  
     
       }else{
         
@@ -571,7 +585,7 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
         slice(n=1) %>%
         select(skill_rank)
         
-        df[i,j+10] = as.numeric(Skills_Rank$skill_rank)  
+        df[i,j+(n_mentors+1)] = as.numeric(Skills_Rank$skill_rank)  
         
         
       }
@@ -580,12 +594,12 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
     
   }
   
-  df$sum = rowSums(df[,13:21])
+  df$sum = rowSums(df[,(n_mentors+6):((n_mentors*2)+5)])
   
   df1 = df %>% group_by(combo) %>%
     arrange(desc(sum)) %>%
     mutate(combo_sum = sum(sum)) %>%
-    slice(n=9) %>%
+    slice(n=n_mentors) %>%
     ungroup() %>%
     arrange(desc(combo_sum))
     
@@ -606,7 +620,7 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
   rooms = subset(rooms, Freq!=0)
   
   ## Order the mentors within the breakout selection.
-  long = melt(breakout_selection[,c(23,13:21)], id.vars = "index")
+  long = melt(breakout_selection[,c(ncol(breakout_selection),(n_mentors+6):((n_mentors*2)+5))], id.vars = "index")
   long$variable = as.character(long$variable)
   
   long = long %>%
@@ -615,7 +629,7 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
     mutate(position = seq(1,n(),1)) %>%
     ungroup()
   
-  long$variable = ff(long$variable, colnames(breakout_selection[13:21]), breakout_selection[1,3:11], ignore.case = T)
+  long$variable = ff(long$variable, colnames(breakout_selection[15:23]), breakout_selection[1,5:13], ignore.case = T)
   
   brs = subset(breakout_selection, select = c('index','Module1_SK','Module2_SK'))
   brs$Mentor.Name = NA
@@ -644,4 +658,132 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
   brs_long$mod = ff(brs_long$mod, unique(brs_long$mod), c("Module1","Module2"), ignore.case = T)
   
   return(brs_long)
+}
+
+assign_subskills  = function(mentor_mod_df, mentee_pref_df1, mentee_pref_df2) {
+  
+  ## A UDF designed to efficiently capture mentee subskill
+  # preferences in breakout rooms, for modules 1 and 2,
+  # which have been defined before selecting mentors.
+  # Requires prepared mentee preference dataframes, long 
+  # format.
+  
+  skills = data.frame(table(mentor_mod_df$topic[mentor_mod_df$mod=="Module1"]))
+  skills$topic = as.character(skills$Var1)
+  skills = skills[c(3,2)]
+  
+  df = data.frame(mod   = rep(c("Module1","Module2"), each = min_mentors),
+                  topic = rep(NA, nrow(mentor_mod_df)),
+                  Skill.SubSkill = rep(NA, nrow(mentor_mod_df)))
+  df[,1:ncol(df)] = sapply(df[,1:ncol(df)], function(x) FUN = as.character(x))
+  df$breakout_room = rep(seq(1,min_mentors, by=1), times = 2)
+  
+  count = 1
+  while(count < length(df$mod[df$mod=="Module1"])){
+  
+    for(i in 1:nrow(skills)){
+      
+   slice = mentee_pref_df1 %>%
+     filter(Skill==skills$topic[i]) %>%
+     arrange(desc(n_ranking)) %>% 
+     slice_head(n=skills$Freq[i]) %>%
+     select(Skill, Skill.SubSkill)
+  
+   
+   df[count:((count+skills$Freq[i])-1),2:3] = slice[,c(1,2)]
+   
+   count = count + skills$Freq[i]
+    }
+  }
+  
+  ## Assign subskills to module 2
+  skills = data.frame(table(mentor_mod_df$topic[mentor_mod_df$mod=="Module2"]))
+  skills$topic = as.character(skills$Var1)
+  skills = skills[c(3,2)]
+  
+  
+  while(count < nrow(df)){
+    
+    for(i in 1:nrow(skills)){
+      
+      slice = mentee_pref_df2 %>%
+        filter(Skill==skills$topic[i]) %>%
+        arrange(desc(n_ranking)) %>% 
+        slice_head(n=skills$Freq[i]) %>%
+        select(Skill, Skill.SubSkill)
+      
+      
+      df[count:((count+skills$Freq[i])-1),2:3] = slice[,c(1,2)]
+      
+      count = count + skills$Freq[i]
+    }
+  }
+  
+  # Now merge the selected subskills with the main module assignments.
+  
+  mentor_mod_df = merge(mentor_mod_df, df[,c(1,3:4)], by = c("mod","breakout_room"), all.x = T)
+  
+  return(mentor_mod_df)
+}
+
+assign_mentees_v2 = function(mentor_mod_df, mentee_df) {
+  
+  ## A UDF which requires two inputs: modules with mentors assigned to 
+  # breakout rooms and skills; and the mentee preferences dataframe.
+  # Mentees are assigned to breakout rooms based on skill preference.
+  
+  unique_mentee = unique(mentee_df$Mentee)
+  
+  # See the most popular subskills within each larger skill group.
+  # Start with the mentee_long df and go from there.
+  
+  
+  
+  
+  new_mentee = data.frame(Mentee.Name = rep(unique_mentee,2),
+                          Module = rep(1:2, each = length(unique_mentee)),
+                          SK = c(mentee_df$topics1,mentee_df$topics2))
+  
+  new_mentee[,1:ncol(new_mentee)] = sapply(new_mentee[,1:ncol(new_mentee)], function(x) FUN = as.character(x))
+  
+  new_mentee_mod_skills = subset(new_mentee, SK %in% module_topics$topic)
+  
+  mentor_module_df$mentee1 = as.character(NA) # Pre-allocate space in the dataframe for mentee assignment
+  mentor_module_df$mentee2 = as.character(NA)
+  mentor_module_df$mentee3 = as.character(NA)
+  
+  ## For assignation purposes, convert to long. 
+  d_long = melt(mentor_module_df[c(1,3:7)], id.vars = c("Mentor","Module","Skill"))
+  colnames(d_long) = c("Mentor","Module","Skill","Mentee","Mentee.Name")
+  d_long = d_long %>% arrange(Module, Mentee)
+  
+  for(i in 1:nrow(new_mentee)) {
+    
+    next_skill  = new_mentee$SK[i]
+    next_mentee = new_mentee$Mentee.Name[i]
+    
+    available_slots = as.numeric(length(d_long$Mentee.Name[d_long$Skill==next_skill & d_long$Mentee.Name!="NA"])) # How many slots available?
+    match       = next_skill %in% module_topics$topics & available_slots > 0
+    
+    if(match==TRUE){
+      
+      counts = as.data.frame(table(d_long$Skill[d_long$Mentee.Name!="NA"]))
+      colnames(counts)[1] = "Skill"
+      
+      if(next_skill %in% counts$Skill) {
+        j = as.numeric(counts$Freq[counts$Skill==next_skill]) + 1
+        d_long$Mentee.Name[d_long$Skill==next_skill][j] = new_mentee$Mentee.Name[i]
+        
+      } else {
+        
+        j = 1
+        d_long$Mentee.Name[d_long$Skill==next_skill][j] = new_mentee$Mentee.Name[i]
+        
+      }
+    }
+    
+  }
+  
+  d_wide = dcast(d_long, Mentor + Module + Skill ~ Mentee, value = "Mentee.Name")
+  return(d_wide)    
 }
