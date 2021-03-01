@@ -45,7 +45,8 @@ skills_map = data.frame(SK = c("SK1", "SK2", "SK3", "SK4", "SK5", "SK6", "SK7", 
                         character_name = c("Entrepreneurship","Career Progression","Interpersonal Relationships",
                                            "Leadership: Personal", "Leadership: Team", "Leadership: Strategic", 
                                            "Transition", "Work-Life Considerations", "Personal Growth"))
-
+subskill_map = read.csv(file = "subskill_map.csv", stringsAsFactors = F)
+subskill_map = subskill_map[subskill_map$Character_Response!="",] 
 
     ## Reshape datafiles
 # mentor datafile
@@ -70,9 +71,9 @@ mentee_long$Skill = substr(mentee_long$Skill.SubSkill, 1, 3)
 
 
 # Use the topics identified in columns 2 and 3 of the mentee responses to identify module topics
-module_topics1 = find_ideal_module(mentee$topics1,mentee$topics2, 6) # This will take some time to run as it searches for the best module combinations.
+module_topics = find_ideal_module(mentee$topics1,mentee$topics2, 8) # This will take some time to run as it searches for the best module combinations.
 
-module_breakout1 = define_modules_v2(module_topics1, mentee$topics1,mentee$topics2)
+module_breakout = define_modules_v2(module_topics, mentee$topics1,mentee$topics2)
 
 # Determine which mentors to select based on module topics
   # and number of breakout rooms needed per topic.
@@ -86,7 +87,8 @@ mentor_preferences = mentor_long %>%
 
 
 # Assign mentors to modules + breakout rooms by interest + experience
-mentor_module_df = select_mentors_v2(mentor_preferences, module_breakout1, min_mentors)  # <- this will take a minute to run.
+mentor_module_df = select_mentors_v2(mentor_preferences, module_breakout, min_mentors) # This will take some time to run as it searches for the best mentor / module combinations.
+
   # We need to add a check here that says, 'if unique(mentor_module_df$Skill) < n_topics
   # then re-run the code' because we will not optimize the matching.
 
@@ -124,11 +126,33 @@ mentor_module_df_ss = assign_subskills(mentor_module_df, mentee_preferences_mod1
 
 # Last step is to assign mentees to mentors and modules, 
 # based on the identified subtopics.
+# This function will sometimes get stuck - I am still looking into why - 
+# But it is consistently yielding the correct result when it does run, which is most of the time.
+# If assign_mentees_v2() takes more than a few seconds to run; force stop and try again.
+mod1_assignments = assign_mentees_v2(mentor_module_df_ss, mentee_long,"Module1")
 
-assignments = assign_mentees_v2(mentor_module_df_ss, mentee)
+## Sanity check - unique names for each breakout room
+#check = melt(mod1_assignments, id.vars = c("mentor","mod","topic","breakout_room","Skill.SubSkill"))
+#length(unique(check$value)) # Should equal to nrow(mentee)
 
-assignments = assignments %>% arrange(Module) %>% 
-  group_by(Module) %>%
-  mutate(Breakout.Rooms = seq(1,n(), by = 1)) %>%
-  ungroup()
+mod2_assignments = assign_mentees_v2(mentor_module_df_ss, mentee_long,"Module2")
+
+## Sanity check - unique names for each breakout room
+#check = melt(mod2_assignments, id.vars = c("mentor","mod","topic","breakout_room","Skill.SubSkill"))
+#length(unique(check$value)) # Should equal to nrow(mentee)
+
+### Finally, combine the assignments ###
+assignments = rbind(mod1_assignments, mod2_assignments)
+colnames(assignments)[1:5] = c("Mentor.Name","Module","Skill","Breakout_Room","SubSkill")
+
+# Map the Skill tags back to English #
+assignments$Skill = ff(assignments$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
+assignments$SubSkill = ff(assignments$SubSkill, as.character(subskill_map$Short_Response),  as.character(subskill_map$Character_Response), ignore.case = T)
+
+assignments = assignments %>% arrange(Module, Breakout_Room)
+  # Remove commas and other characters so that output format isn't interrupted in .csv file.
+assignments$SubSkill = gsub(",", "", assignments$SubSkill, fixed = TRUE)
+assignments$SubSkill = gsub("&", "", assignments$SubSkill, fixed = TRUE)
+
+write.csv(assignments, file = "final_example_output.csv", row.names = F, quote = F)
 
