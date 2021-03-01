@@ -542,16 +542,10 @@ select_mentors_v2 = function(mentor_pref_df, modules_defined, n_mentors) {
   rownames(df) = NULL
   #colnames(df)[1:2] = c('Module1_SK','Module2_SK')
   df$combo = rep(seq(1,nrow(combos), by = 1), each = nrow(bo_rooms))
-  df$mentor1_rank = NA
-  df$mentor2_rank = NA
-  df$mentor3_rank = NA
-  df$mentor4_rank = NA
-  df$mentor5_rank = NA
-  df$mentor6_rank = NA
-  df$mentor7_rank = NA
-  df$mentor8_rank = NA
-  df$mentor9_rank = NA
   
+  new_cols = paste("Mentor",seq(1:min_mentors),"rank",sep="") # Preallocate space for mentor rank
+  df[new_cols] = NA
+
   # Now go through and test each set of 9 mentors for appropriateness of each module.
   # There are n unique possible combinations of topics breakout room configurations. 
   
@@ -672,11 +666,8 @@ assign_subskills  = function(mentor_mod_df, mentee_pref_df1, mentee_pref_df2) {
   skills$topic = as.character(skills$Var1)
   skills = skills[c(3,2)]
   
-  df = data.frame(mod   = rep(c("Module1","Module2"), each = min_mentors),
-                  topic = rep(NA, nrow(mentor_mod_df)),
-                  Skill.SubSkill = rep(NA, nrow(mentor_mod_df)))
-  df[,1:ncol(df)] = sapply(df[,1:ncol(df)], function(x) FUN = as.character(x))
-  df$breakout_room = rep(seq(1,min_mentors, by=1), times = 2)
+  df = mentor_mod_df
+  df$Skill.SubSkill = as.character(NA)
   
   count = 1
   while(count < length(df$mod[df$mod=="Module1"])){
@@ -690,7 +681,7 @@ assign_subskills  = function(mentor_mod_df, mentee_pref_df1, mentee_pref_df2) {
      select(Skill, Skill.SubSkill)
   
    
-   df[count:((count+skills$Freq[i])-1),2:3] = slice[,c(1,2)]
+   df[count:((count+skills$Freq[i])-1),c(1,5)] = slice[,c(1,2)]
    
    count = count + skills$Freq[i]
     }
@@ -713,77 +704,199 @@ assign_subskills  = function(mentor_mod_df, mentee_pref_df1, mentee_pref_df2) {
         select(Skill, Skill.SubSkill)
       
       
-      df[count:((count+skills$Freq[i])-1),2:3] = slice[,c(1,2)]
+      df[count:((count+skills$Freq[i])-1),c(1,5)] = slice[,c(1,2)]
       
       count = count + skills$Freq[i]
     }
   }
-  
-  # Now merge the selected subskills with the main module assignments.
-  
-  mentor_mod_df = merge(mentor_mod_df, df[,c(1,3:4)], by = c("mod","breakout_room"), all.x = T)
-  
-  return(mentor_mod_df)
+
+  return(df)
 }
 
-assign_mentees_v2 = function(mentor_mod_df, mentee_df) {
+assign_mentees_v2 = function(mentor_mod_df, mentee_df, module) {
   
-  ## A UDF which requires two inputs: modules with mentors assigned to 
+  ## A UDF which requires thwo inputs: modules with mentors assigned to 
   # breakout rooms and skills; and the mentee preferences dataframe.
   # Mentees are assigned to breakout rooms based on skill preference.
   
-  unique_mentee = unique(mentee_df$Mentee)
+  unique_mentee = unique(mentee_df$Mentee.Name)
   
-  # See the most popular subskills within each larger skill group.
-  # Start with the mentee_long df and go from there.
+  if(module=="Module1"){
+    Skill.Set = quo(Skill.Mod1)
+    Skill.Set.Other = quo(Skill.Mod2)
+    
+  } else{
+    Skill.Set = quo(Skill.Mod2)
+    Skill.Set.Other = quo(Skill.Mod1)
+  }
+  
+  new_cols = paste("Mentee",seq(1:max_mentees),sep="")
+  mentor_mod_df[new_cols] = as.character(NA)
+
+  m1 = mentee_df %>%
+    filter((!!Skill.Set)==Skill & !is.na(Ranking)) %>%
+    #select(-(!!Skill.Set)) %>%
+    group_by(Mentee.Name) %>%
+    add_tally(Skill.SubSkill %in% d_long$Skill.SubSkill[d_long$mod==module], name = "n_skills") %>%
+    mutate(prob = 1/(n_skills)) %>%
+    ungroup()
+  
+  m1$prob[m1$prob=="Inf"] = 0
+  
+  other_m = mentee_df %>%
+    filter((!!Skill.Set.Other)==Skill & !is.na(Ranking)) %>%
+    #select(-(!!Skill.Set)) %>%
+    group_by(Mentee.Name) %>%
+    add_tally(Skill.SubSkill %in% d_long$Skill.SubSkill[d_long$mod==module], name = "n_skills") %>%
+    mutate(prob = 1/(n_skills)) %>%
+    ungroup()
+  
+  other_m$prob[other_m$prob=="Inf"] = 0
   
   
-  
-  
-  new_mentee = data.frame(Mentee.Name = rep(unique_mentee,2),
-                          Module = rep(1:2, each = length(unique_mentee)),
-                          SK = c(mentee_df$topics1,mentee_df$topics2))
-  
-  new_mentee[,1:ncol(new_mentee)] = sapply(new_mentee[,1:ncol(new_mentee)], function(x) FUN = as.character(x))
-  
-  new_mentee_mod_skills = subset(new_mentee, SK %in% module_topics$topic)
-  
-  mentor_module_df$mentee1 = as.character(NA) # Pre-allocate space in the dataframe for mentee assignment
-  mentor_module_df$mentee2 = as.character(NA)
-  mentor_module_df$mentee3 = as.character(NA)
-  
+  # How many mentees won't be able to be assigned?
+  no_assignment = data.frame(table(m1$Mentee.Name, m1$Skill.SubSkill %in% (unique(mentor_mod_df$Skill.SubSkill[mentor_mod_df$mod==module]))))
+
+  no_assignment = no_assignment %>%
+    mutate(Mentee.Name = as.character(Var1)) %>%
+    mutate(Skills = as.character(Var2)) %>%
+    filter(Skills=="FALSE" & Freq == 3) %>%
+    select(Mentee.Name)
+ 
   ## For assignation purposes, convert to long. 
-  d_long = melt(mentor_module_df[c(1,3:7)], id.vars = c("Mentor","Module","Skill"))
-  colnames(d_long) = c("Mentor","Module","Skill","Mentee","Mentee.Name")
-  d_long = d_long %>% arrange(Module, Mentee)
+  d_long = melt(mentor_mod_df, id.vars = c("mentor","mod","topic","breakout_room","Skill.SubSkill"))
+  colnames(d_long)[6:7] = c("Mentee","Mentee.Name")
+  d_long$Mentee = as.character(d_long$Mentee) 
+  m1d_long = d_long
+  # This assignment could take awhile, depending on how many times it needs to go through the sampling procedure
+  # to ensure that everyone who may possible be assigned has a spot.
+  unassigned_mentees = unique_mentee[!(unique_mentee %in% no_assignment$Mentee.Name)] 
   
-  for(i in 1:nrow(new_mentee)) {
+while(length(unassigned_mentees) > 0) {  # Do this until we assign all possible mentees.
+  
+  # Remove mentees without mod1 skills from first cut consideration (they'll get prioritized in the next round)
+  unassigned_mentees = unique_mentee[!(unique_mentee %in% no_assignment$Mentee.Name)] 
+  
+  # Get a random shuffling of rows.
+  m1d_long = m1d_long %>% 
+    filter(mod==module) %>%
+    sample_frac(1)
+  
+  try = 1
+  
+  while(try < 6){ # Cut the loop after a certain amount of tries. 5 is sufficient.
     
-    next_skill  = new_mentee$SK[i]
-    next_mentee = new_mentee$Mentee.Name[i]
+for(i in 1:3){    # Assign mentees in such a way that prioritizes first choices
+  count = 0
+  while(count < length(m1d_long$mod[m1d_long$mod==module & is.na(m1d_long$Mentee.Name)])) {
     
-    available_slots = as.numeric(length(d_long$Mentee.Name[d_long$Skill==next_skill & d_long$Mentee.Name!="NA"])) # How many slots available?
-    match       = next_skill %in% module_topics$topics & available_slots > 0
+    count = count + 1
+    slice = m1 %>%
+      filter(Skill.SubSkill == m1d_long$Skill.SubSkill[is.na(m1d_long$Mentee.Name)][count] & Ranking==i & Mentee.Name %in% unassigned_mentees) %>%
+      arrange(desc(prob)) %>%
+      slice(n=1) %>%
+      select(Mentee.Name, prob)
     
-    if(match==TRUE){
+    if(length(slice$Mentee.Name)==0) {
       
-      counts = as.data.frame(table(d_long$Skill[d_long$Mentee.Name!="NA"]))
-      colnames(counts)[1] = "Skill"
+      m1d_long$Mentee.Name[is.na(m1d_long$Mentee.Name)][count] = as.character(NA)
+      unassigned_mentees = unassigned_mentees
       
-      if(next_skill %in% counts$Skill) {
-        j = as.numeric(counts$Freq[counts$Skill==next_skill]) + 1
-        d_long$Mentee.Name[d_long$Skill==next_skill][j] = new_mentee$Mentee.Name[i]
+    }else{
+    
+      m1d_long$Mentee.Name[is.na(m1d_long$Mentee.Name)][count] = slice$Mentee.Name
+    
+      unassigned_mentees = unassigned_mentees[unassigned_mentees!= slice$Mentee.Name]
+      }
+    
+    }
+  }
+    try = try + 1
+  }
+  
+}
+ 
+  ## At this point, everyone who can be assigned to the module has been.
+  # Now let's evaluate the 'no assignment' mentees' second choice subskill.
+  # and assign them to those subskills in this module. Last resort is to randomly assign them a subskill.
+  
+  # First evaluate who may be assigned (i.e. they have second choice subskills in available mod1 subskills)
+
+  no_assignment2 = other_m %>%
+    filter(Mentee.Name %in% no_assignment$Mentee.Name & Skill.SubSkill %in% m1d_long$Skill.SubSkill[m1d_long$mod==module & is.na(m1d_long$Mentee.Name)]) %>%
+    group_by(Mentee.Name) %>%
+    slice(n=1) %>%
+    select(Mentee.Name) %>%
+    ungroup()
+  
+  # Will need to add a check - if the length above is not equal to length of no assignment previously, 
+  # then we'll have a set of mentees with which we need to do a random assignment.
+  
+  m1d_long2 = m1d_long
+  if(length(no_assignment2$Mentee.Name) > 0) { # If anyone has second choice subskills in available modules, assign them now.
+ 
+  # For now, add the mentees who weren't lucky enough to get assigned before. 
+  next_mentees = no_assignment2$Mentee.Name[no_assignment2$Mentee.Name %in% no_assignment$Mentee.Name]
+
+  try = 1
+  while(try < 6) {  # Try five times.
+    
+    # Remove mentees without mod1 skills from first cut consideration (they'll get prioritized in the next round)
+    unassigned_mentees = no_assignment2$Mentee.Name[no_assignment2$Mentee.Name %in% no_assignment$Mentee.Name] 
+    
+    ## Work with the previously saved dataframe, but secure the previous result in the event we need to rework the next set of assignments.
+    m1d_long2 = m1d_long
+    
+    for(i in 1:3){    # Assign mentees in such a way that prioritizes first choices
+      count = 0
+      while(count < length(m1d_long2$mod[m1d_long2$mod==module & is.na(m1d_long2$Mentee.Name)])) {
         
-      } else {
+        count = count + 1
+        slice = other_m %>%
+          filter(Skill.SubSkill == m1d_long2$Skill.SubSkill[is.na(m1d_long2$Mentee.Name)][count] & Ranking==i & Mentee.Name %in% unassigned_mentees) %>%
+          arrange(desc(prob)) %>%
+          slice(n=1) %>%
+          select(Mentee.Name, prob)
         
-        j = 1
-        d_long$Mentee.Name[d_long$Skill==next_skill][j] = new_mentee$Mentee.Name[i]
+        if(length(slice$Mentee.Name)==0) {
+          
+          m1d_long2$Mentee.Name[is.na(m1d_long2$Mentee.Name)][count] = as.character(NA)
+          unassigned_mentees = unassigned_mentees
+          
+          
+        }else{
+          
+          m1d_long2$Mentee.Name[is.na(m1d_long2$Mentee.Name)][count] = slice$Mentee.Name
+          
+          unassigned_mentees = unassigned_mentees[unassigned_mentees!= slice$Mentee.Name]
+          
+        }
         
       }
     }
-    
+    try = try + 1
+    }  
   }
   
-  d_wide = dcast(d_long, Mentor + Module + Skill ~ Mentee, value = "Mentee.Name")
+  unassigned_mentees = unique_mentee[!unique_mentee %in% unique(m1d_long2$Mentee.Name[m1d_long2$mod==module])]
+  if(length(unassigned_mentees)==0) {
+    
+    unassigned_mentees = unique_mentee[!unique_mentee %in% unique(m1d_long$Mentee.Name[m1d_long$mod==module])]
+  }
+  if(length(unassigned_mentees) > 0){ # If we still fail to assign these people, then randomize their assignment.
+    order = sample(unassigned_mentees, (length(unassigned_mentees)), replace = F)
+  
+    count = as.numeric(length(order))
+    
+      while(count > 0 ){
+      
+      m1d_long2$Mentee.Name[is.na(m1d_long2$Mentee.Name)][count] = order[count]
+      count = count - 1
+    }
+    
+  } # Everybody is now assigned a breakout room in Module 1.
+  
+  d_wide = dcast(m1d_long2, mentor + mod + topic + breakout_room + Skill.SubSkill ~ Mentee, value = "Mentee.Name")
   return(d_wide)    
 }
+
