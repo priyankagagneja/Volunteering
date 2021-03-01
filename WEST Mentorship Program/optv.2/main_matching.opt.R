@@ -45,7 +45,8 @@ skills_map = data.frame(SK = c("SK1", "SK2", "SK3", "SK4", "SK5", "SK6", "SK7", 
                         character_name = c("Entrepreneurship","Career Progression","Interpersonal Relationships",
                                            "Leadership: Personal", "Leadership: Team", "Leadership: Strategic", 
                                            "Transition", "Work-Life Considerations", "Personal Growth"))
-
+subskill_map = read.csv(file = "subskill_map.csv", stringsAsFactors = F)
+subskill_map = subskill_map[subskill_map$Character_Response!="",] 
 
     ## Reshape datafiles
 # mentor datafile
@@ -146,5 +147,12 @@ colnames(assignments)[1:5] = c("Mentor.Name","Module","Skill","Breakout_Room","S
 
 # Map the Skill tags back to English #
 assignments$Skill = ff(assignments$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
+assignments$SubSkill = ff(assignments$SubSkill, as.character(subskill_map$Short_Response),  as.character(subskill_map$Character_Response), ignore.case = T)
+
+assignments = assignments %>% arrange(Module, Breakout_Room)
+  # Remove commas and other characters so that output format isn't interrupted in .csv file.
+assignments$SubSkill = gsub(",", "", assignments$SubSkill, fixed = TRUE)
+assignments$SubSkill = gsub("&", "", assignments$SubSkill, fixed = TRUE)
 
 write.csv(assignments, file = "final_example_output.csv", row.names = F, quote = F)
+

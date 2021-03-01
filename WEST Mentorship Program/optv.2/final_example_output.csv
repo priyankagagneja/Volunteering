@@ -1,19 +1,19 @@
 Mentor.Name,Module,Skill,Breakout_Room,SubSkill,Mentee1,Mentee2,Mentee3
-Ania Wronski,Module1,Career Progression,3,SK2_SS2,Katherine Hall,Cherry Gao,Betty Chan
-Joseph Lehar,Module1,Career Progression,1,SK2_SS5,Adrienne Li,Jennifer Grant,Yunxing (Stella) Li
-Juliette Chen,Module1,Career Progression,2,SK2_SS1,Grace Ingalls,Eva Fast,Suchi
-Lori Rudolph-Owen,Module1,Leadership: Strategic,6,SK6_SS3,Anne Cheung,Jess Elman,May Sy
-Monique Yoakim-Turk,Module1,Personal Growth,9,SK9_SS3,Jen Rice,Michelle Nguyen-McCarty,Ellen Vieux
-Nicole Barna,Module1,Leadership: Strategic,7,SK6_SS5,Carrie Adams,Fabienne Furt,Susan Hanlon Daudelin
-Nicole Daley,Module1,Personal Growth,8,SK9_SS1,Qiuchen Guo,Juliet Crabtree,Sandra Grund
-Noel Theodosiou,Module1,Leadership: Team,5,SK5_SS1,Paige Baldwin,Chloe Delepine,Nai-Jia Huang
-Sailaja Battula,Module1,Career Progression,4,SK2_SS3,Cherry Greiner,Phyllis Ottaviano,Joo Hyun Im
-Ania Wronski,Module2,Interpersonal Relationships,3,SK3_SS1,Chloe Delepine,Joo Hyun Im,Suchi
-Joseph Lehar,Module2,Career Progression,1,SK2_SS1,Jennifer Grant,Grace Ingalls,Nai-Jia Huang
-Juliette Chen,Module2,Career Progression,2,SK2_SS3,May Sy,Jen Rice,Juliet Crabtree
-Lori Rudolph-Owen,Module2,Leadership: Personal,6,SK4_SS4,Cherry Gao,Carrie Adams,Fabienne Furt
-Monique Yoakim-Turk,Module2,Transition,9,SK7_SS3,Betty Chan,Katherine Hall,Eva Fast
-Nicole Barna,Module2,Transition,7,SK7_SS1,Adrienne Li,Sandra Grund,Qiuchen Guo
-Nicole Daley,Module2,Transition,8,SK7_SS2,Cherry Greiner,Phyllis Ottaviano,Jess Elman
-Noel Theodosiou,Module2,Leadership: Personal,5,SK4_SS3,Yunxing (Stella) Li,Michelle Nguyen-McCarty,Ellen Vieux
-Sailaja Battula,Module2,Interpersonal Relationships,4,SK3_SS3,Paige Baldwin,Anne Cheung,Susan Hanlon Daudelin
+Joseph Lehar,Module1,Career Progression,1,strategies,Adrienne Li,Jennifer Grant,Yunxing (Stella) Li
+Juliette Chen,Module1,Career Progression,2,decision making,Grace Ingalls,Eva Fast,Suchi
+Ania Wronski,Module1,Career Progression,3,innovative thinking,Katherine Hall,Cherry Gao,Betty Chan
+Sailaja Battula,Module1,Career Progression,4,mentors/coaches/sponsors,Cherry Greiner,Phyllis Ottaviano,Joo Hyun Im
+Noel Theodosiou,Module1,Leadership: Team,5,Collaboration Relationship Building,Paige Baldwin,Chloe Delepine,Nai-Jia Huang
+Lori Rudolph-Owen,Module1,Leadership: Strategic,6,Innovation,Anne Cheung,Jess Elman,May Sy
+Nicole Barna,Module1,Leadership: Strategic,7,Strategic Thinking,Carrie Adams,Fabienne Furt,Susan Hanlon Daudelin
+Nicole Daley,Module1,Personal Growth,8,adaptability  resilience,Qiuchen Guo,Juliet Crabtree,Sandra Grund
+Monique Yoakim-Turk,Module1,Personal Growth,9,confidence building,Jen Rice,Michelle Nguyen-McCarty,Ellen Vieux
+Joseph Lehar,Module2,Career Progression,1,decision making,Jennifer Grant,Grace Ingalls,Nai-Jia Huang
+Juliette Chen,Module2,Career Progression,2,mentors/coaches/sponsors,May Sy,Jen Rice,Juliet Crabtree
+Ania Wronski,Module2,Interpersonal Relationships,3,active listening,Chloe Delepine,Joo Hyun Im,Suchi
+Sailaja Battula,Module2,Interpersonal Relationships,4,difficult conversations,Paige Baldwin,Anne Cheung,Susan Hanlon Daudelin
+Noel Theodosiou,Module2,Leadership: Personal,5,Effectiveness Efficiency  Execution,Yunxing (Stella) Li,Michelle Nguyen-McCarty,Ellen Vieux
+Lori Rudolph-Owen,Module2,Leadership: Personal,6,Influence,Cherry Gao,Carrie Adams,Fabienne Furt
+Nicole Barna,Module2,Transition,7,Interviewing,Adrienne Li,Sandra Grund,Qiuchen Guo
+Nicole Daley,Module2,Transition,8,LinkedIn  Public Presence Networking,Cherry Greiner,Phyllis Ottaviano,Jess Elman
+Monique Yoakim-Turk,Module2,Transition,9,Negotiation,Betty Chan,Katherine Hall,Eva Fast
