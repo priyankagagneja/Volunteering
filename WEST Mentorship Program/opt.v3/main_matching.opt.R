@@ -1,0 +1,196 @@
+setwd("~/Desktop/mentor_optimization")
+.libPaths( c("~/rlibraries", .libPaths()))
+
+## Read in needed libraries
+pacman::p_load(reshape2, dplyr, survey, purrr, tidyr, lubridate, readxl)
+
+## Source program functions
+source("functions.opt.R")
+
+# Set Global Variables here
+max_mentees = 3
+min_mentees = 1
+
+# Read in the Session Date from Shiny
+session_date = "2021-03-23" # Session Date for the optimization
+optimize_mentors = FALSE    # Optimize the number of mentors, or use all available mentors?
+
+#### DATA PREP PHASE ####
+
+## Read in data
+mentor = read.csv("mentor_realistic.csv", stringsAsFactors = F)
+#mentee = read_excel("2021-03-23 WEST Mentoring Topic Preference.xlsx", skip = 1) # Read in the excel file, skip the first row. 
+# For some reaon, the above 'read_excel' command isn't working on my machine (Error: path isn't found) 
+# But I'm hoping we can get around this by reading in a google sheet file from Shiny?
+mentee = read.csv("latest_mentee.csv", stringsAsFactors = F)
+mentor_schedule = read.csv("mentor_availability.csv", stringsAsFactors = F)
+subskill_map = read.csv(file = "subskill_map.csv", stringsAsFactors = F)
+
+# Map Module name to SK number
+skills_map = data.frame(SK = c("SK1", "SK2", "SK3", "SK4", "SK5", "SK6", "SK7", "SK8", "SK9"),
+                        character_name = c("Entrepreneurship","Career Progression","Interpersonal Relationships",
+                                           "Leadership: Personal", "Leadership: Team", "Leadership: Strategic", 
+                                           "Transition", "Work-Life Considerations", "Personal Growth"))
+subskill_map = subskill_map[subskill_map$Character_Response!="",] 
+
+## Enforce only the first three selections
+mentee = mentee[,c(1:111)] # Drop the feedback column
+
+# There was one mentee who, for some reason, marked 4 - 6 instead of 1-3. Check for this and correct.
+mins = as.numeric(apply(mentee, 1, FUN=min, na.rm = T))
+to_replace = as.numeric(match(4, mins))
+mentee[to_replace,4:ncol(mentee)]  = sapply(mentee[to_replace,4:ncol(mentee)], function(x) FUN = as.numeric(ff(x, seq(4,6, by = 1), seq(1,3, by = 1))))
+
+mentee[,4:ncol(mentee)][mentee[,4:ncol(mentee)] > 3] <- NA # Only allow the first three subskill choices
+colnames(mentee)[1:3] = c("Mentee.Name","MOD1_TOPIC","MOD2_TOPIC") # Rename columns
+
+## Wrangle the wide format to long format, so that subskill preferences are indicated 
+## as the program expects to see them.
+t1 = mentee[,c(1:57)]
+t2 = mentee[,c(1:3,58:ncol(mentee))]
+
+colnames(t1)[4:ncol(t1)] = subskill_map$Short_Response
+colnames(t2)[4:ncol(t2)] = subskill_map$Short_Response
+
+mentee = rbind(t1, t2)
+
+mentee = mentee %>%
+  arrange(Mentee.Name) %>%
+  group_by(Mentee.Name) %>%
+  tidyr::fill(subskill_map$Short_Response, .direction = "downup") %>%
+  slice(n=1) %>%
+  ungroup()
+
+# Set aside unneeded columns
+mentor = mentor[,c(1, 5:ncol(mentor))]
+
+# Drop values for mentor data where experience <= 3 and interest==1
+exp = grep("experience",colnames(mentor)) # find the columns for experience
+int = grep("interest",colnames(mentor)) # find the columns for interest
+  # Recode the rankings
+mentor[,2:ncol(mentor)] = sapply(mentor[,2:ncol(mentor)], function(x) FUN = as.numeric(ff(x, seq(1,5, by = 1), seq(1,5, by = 1))))
+  # Drop undesired values
+mentor[,first(exp):last(exp)][mentor[,first(exp):last(exp)] <= 3] <- NA
+mentor[,first(int):last(int)][mentor[,first(int):last(int)] == 1] <- NA
+
+# Format columns in availability dataset
+mentor_schedule$SessionDate = mdy(mentor_schedule$SessionDate)
+
+available_mentors = mentor_schedule %>%
+  filter(SessionDate == session_date & Available == "1") %>%
+  summarize(Name)
+
+mentor = subset(mentor, Name %in% available_mentors$Name)
+colnames(mentor)[1] = "Mentor.Name"
+
+## Generate needed variables
+if(optimize_mentors) {
+min_mentors = round(nrow(mentee) / max_mentees) # How many mentors do we need, at minimum?
+} else {
+  min_mentors = as.numeric(nrow(available_mentors))
+}
+
+
+    ## Reshape datafiles
+# mentor datafile
+mentor_long = reshape2::melt(mentor, id.vars = 'Mentor.Name')
+colnames(mentor_long) = c("Mentor.Name","Skill.SubSkill","Ranking")
+mentor_long$Skill.SubSkill  = as.character(mentor_long$Skill.SubSkill)
+mentor_long$Skill = substr(mentor_long$Skill.SubSkill, 1, 3)
+
+# mentee datafile
+mentee$topics1 = ff(mentee$MOD1_TOPIC, skills_map$character_name, as.character(skills_map$SK), ignore.case = T)
+mentee$topics2 = ff(mentee$MOD2_TOPIC, skills_map$character_name, as.character(skills_map$SK), ignore.case = T)
+mentee = mentee[,c(1,58:59,4:57)]
+
+mentee_long = reshape2::melt(mentee, id.vars = c('Mentee.Name','topics1','topics2'))
+colnames(mentee_long) = c("Mentee.Name","Skill.Mod1","Skill.Mod2","Skill.SubSkill","Ranking")
+mentee_long[,1:ncol(mentee_long)] = sapply(mentee_long[,1:ncol(mentee_long)], function(x) FUN = as.character(x))
+mentee_long$Skill = substr(mentee_long$Skill.SubSkill, 1, 3)
+
+# Check that ranking Rankings are unique within mentees' main skill categories
+
+
+# Use the topics identified in columns 2 and 3 of the mentee responses to identify module topics
+# module_topics = find_ideal_module(mentee$topics1,mentee$topics2, 8) # This will take some time to run as it searches for the best module combinations.
+
+module_breakout = define_modules_v3(mentee$topics1, mentee$topics2, min_mentors)
+
+# Determine which mentors to select based on module topics
+  # and number of breakout rooms needed per topic.
+
+mentor_preferences = mentor_long %>%
+  group_by(Mentor.Name, Skill) %>%
+  mutate(sum_ranking = sum(as.numeric(Ranking), na.rm = T)) %>%
+  slice(n=1) %>%
+  arrange(Skill, desc(sum_ranking)) %>%
+  ungroup()
+
+
+# Assign mentors to modules + breakout rooms by interest + experience
+mentor_module_df = select_mentors_v2(mentor_preferences, module_breakout) # This will take some time to run as it searches for the best mentor / module combinations.
+
+mentee_preferences_mod1 = mentee_long %>%
+  filter(Skill == Skill.Mod1) %>%
+  filter(Ranking <= 3) %>%
+  group_by(Skill, Skill.SubSkill, Ranking) %>%
+  mutate(n_ranking = n()) %>%
+  group_by(Skill, Skill.SubSkill, Ranking, n_ranking) %>%
+  slice(n=1) %>%
+  select(-c(Mentee.Name, Skill.Mod2)) %>%
+  ungroup()
+  
+mentee_preferences_mod2 = mentee_long %>%
+  filter(Skill == Skill.Mod2) %>%
+  filter(Ranking <= 3) %>%
+  group_by(Skill, Skill.SubSkill, Ranking) %>%
+  mutate(n_ranking = n()) %>%
+  group_by(Skill, Skill.SubSkill, Ranking, n_ranking) %>%
+  slice(n=1) %>%
+  select(-c(Mentee.Name, Skill.Mod1)) %>%
+  ungroup()
+
+
+## Above code identifies favorite subskill topics for both modules.
+# In order to get unique subskill topics, you will need to subset to 
+# unique subskills within 'Skill.Mod1' or Skill.Mod2' and then call slice(n=1)
+  
+#  Use mentee preferences to choose subskills.
+mentor_module_df_ss = assign_subskills(mentor_module_df, mentee_preferences_mod1, mentee_preferences_mod2) 
+
+modules = data.frame(table(mentor_mod_df$mod))
+modules = as.character(modules$Var1)
+
+mod1_assignments = assign_mentees_v2(mentor_module_df_ss, mentee_long, modules[1])
+
+## Sanity check - unique names for each breakout room
+#check = melt(mod1_assignments, id.vars = c("mentor","mod","topic","breakout_room","Skill.SubSkill"))
+#length(unique(check$value[!is.na(check$value)]))  # Should equal to nrow(mentee)
+#table(check$value, check$topic)
+#table(mentee$Mentee.Name, mentee$topics1)
+
+mod2_assignments = assign_mentees_v2(mentor_module_df_ss, mentee_long, modules[2])
+
+## Sanity check - unique names for each breakout room
+#check2 = melt(mod2_assignments, id.vars = c("mentor","mod","topic","breakout_room","Skill.SubSkill"))
+#length(unique(check2$value[!is.na(check2$value)])) # Should equal to nrow(mentee)
+#table(check2$value, check2$topic)
+#table(mentee$Mentee.Name, mentee$topics1)
+
+### Finally, combine the assignments ###
+assignments = rbind(mod1_assignments, mod2_assignments)
+colnames(assignments)[1:5] = c("Mentor.Name","Module","Skill","Breakout_Room","SubSkill")
+  # Arrange by module and breakout room
+assignments = assignments %>% arrange(Module, Breakout_Room)
+
+# Map the Skill tags back to character values#
+assignments$Skill = ff(assignments$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
+assignments$SubSkill = ff(assignments$SubSkill, as.character(subskill_map$Short_Response),  as.character(subskill_map$Character_Response), ignore.case = T)
+
+
+  # Remove commas and other characters so that output format isn't interrupted in .csv file.
+assignments$SubSkill = gsub(",", "", assignments$SubSkill, fixed = TRUE)
+assignments$SubSkill = gsub("&", "", assignments$SubSkill, fixed = TRUE)
+
+write.csv(assignments, file = "final_assignments.csv", row.names = F, quote = F)
+
