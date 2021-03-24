@@ -15,11 +15,13 @@ ff = function(x, patterns, replacements = patterns, fill = NA, ...) {
   return(ans)
 }
 
-define_modules_v4 = function(mentee_df, n_mentors) {
+define_module_rank1 = function(mentee_df, n_mentors, tries = 20) {
   
   ## A UDF which examines how many mentees will be naturally
   # fitted into two modules with n mentors, and optimizes that
-  # selection so that as many mentees as appeased as possible.
+  # selection so that as many mentees as appeased as possible
+  # for subskills ranked at 1 of 3.
+  # We allow the while loop to run for 'tries' times - this may be user-defined
   
   # Consider all possible combinations of mentee and module.
   # Then consider which of those combinations allows for the 
@@ -32,185 +34,148 @@ define_modules_v4 = function(mentee_df, n_mentors) {
     sample_frac(1) %>% # Randomly shuffle the subskills within ranking
     arrange(desc(n_rooms)) %>%
     ungroup() %>%
-    mutate(Skill.SubSkill = Var1) %>%
+    mutate(Skill.SubSkill = as.character(Var1)) %>%
     select(Skill.SubSkill, n_rooms) %>%
     mutate(Mentee.Name = NA)
-  
+
   # Create a tracker for who has yet to be assigned
   remaining_assignments = data.frame(Mentee.Name = rep(unique(mentee_df$Mentee.Name), times = 2),
                                      mod = rep(c("Module1","Module2"), each = length(unique(mentee_df$Mentee.Name))))
-  
+
   rank1 = mentee_df  %>%  # Filter to rank 2, unassigned mentees
     filter(Ranking==1) %>%
     filter(Mentee.Name %in% remaining_assignments$Mentee.Name)
   
   
   # Now go through and try each mentee to the subskill.
-  # Object is to find the best selection of 17 rooms over two modules
-  # Set up loop parameters
-  try = 1
-  allowable_tries = 20
-  df = mentee_df[complete.cases(mentee_df==T) & mentee_df$Ranking == 1,] # reset the program
-  data = module_df %>%
-    sample_frac(1)
-  result = list(data)
-  count = 1
+  # Object is to find the best selection of n rooms over two modules
+# Set up loop parameters
+try = 1
+allowable_tries = tries
+df = mentee_df[complete.cases(mentee_df==T) & mentee_df$Ranking == 1,] # reset the program
+data = module_df %>%
+  sample_frac(1)
+result = list(data)
+count = 1
+          
+while(nrow(data[is.na(data$Mentee.Name),]) > 0 & length(result) < (allowable_tries+1)) {
+
+            slice = rank1 %>%
+              filter(Skill.SubSkill == data$Skill.SubSkill[count]) %>%
+              sample_frac(1) %>%
+              slice(n =1) %>%
+              select(Mentee.Name, Skill.SubSkill)
+            
+            if(length(slice$Mentee.Name)==0) {
+              data$Mentee.Name[count] = NA
+            }else{
+              data$Mentee.Name[count] = slice$Mentee.Name
+              
+              df = df %>%
+                mutate(drop = ifelse(Mentee.Name==slice$Mentee.Name & Skill.SubSkill == slice$Skill.SubSkill, TRUE, NA)) %>%
+                group_by(Mentee.Name, Skill) %>%
+                fill(drop, .direction = "downup") %>%
+                filter(is.na(drop)) %>%
+                ungroup() %>%
+                select(-drop)
+            }
+            
+            if(count==nrow(data)){
+            
+              d = list(data)
+              result <- cbind(result, d)
+              df = mentee_df[complete.cases(mentee_df==T) & mentee_df$Ranking == 1,] # reset the program
+              data = module_df %>%
+                sample_frac(1)
+              count = 1
+              try = try + 1
+              
+     
+            } else{
+              
+              count = count + 1
+            }
+          }
+
+## Save which `try` minimizes the number of non-assigned mentees.
+count = 1
+n_miss = data.frame(result_number = seq(1, length(result), by = 1),
+                    n_missing = NA)
+while(count < length(result)){
   
-  while(nrow(data[is.na(data$Mentee.Name),]) > 0 & length(result) < (allowable_tries+1)) {
-    
-    slice = rank1 %>%
-      filter(Skill.SubSkill == data$Skill.SubSkill[count]) %>%
-      sample_frac(1) %>%
-      slice(n =1) %>%
-      select(Mentee.Name, Skill.SubSkill)
-    
-    if(length(slice$Mentee.Name)==0) {
-      data$Mentee.Name[count] = NA
-    }else{
-      data$Mentee.Name[count] = slice$Mentee.Name
-      
-      df = df %>%
-        mutate(drop = ifelse(Mentee.Name==slice$Mentee.Name & Skill.SubSkill == slice$Skill.SubSkill, TRUE, NA)) %>%
-        group_by(Mentee.Name, Skill) %>%
-        fill(drop, .direction = "downup") %>%
-        filter(is.na(drop)) %>%
-        ungroup() %>%
-        select(-drop)
-    }
-    
-    if(count==nrow(data)){
-      
-      d = list(data)
-      result <- cbind(result, d)
-      df = mentee_df[complete.cases(mentee_df==T) & mentee_df$Ranking == 1,] # reset the program
-      data = module_df %>%
-        sample_frac(1)
-      count = 1
-      try = try + 1
-      
-      
-    } else{
-      
-      count = count + 1
-    }
-  }
+  try = result[[count]]
+  n_miss$n_missing[count] = nrow(try[is.na(try$Mentee.Name),])
   
-  ## Save which `try` minimizes the number of non-assigned mentees.
-  count = 1
-  n_miss = data.frame(result_number = seq(1, length(result), by = 1),
-                      n_missing = NA)
-  while(count < length(result)){
-    
-    try = result[[count]]
-    n_miss$n_missing[count] = nrow(try[is.na(try$Mentee.Name),])
-    
-    count = count + 1
-  }
-  
-  min_miss = n_miss %>% # Filter to the minimum number of missing values per try
-    mutate(min = min(n_missing, na.rm = T)) %>%
-    filter(n_missing == min) %>%
-    select(result_number)
-  
-  ## Sanity check - remove later
-  #check = result[[first(min_miss$result_number)]]
-  #check$Skill = substr(check$Skill.SubSkill, 1, 3)
-  #check$Skill = ff(check$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
-  # Looks good up to this point - main skills are on point with what we expect.
-  
-  # Split rooms into two modules so that room space is maximized but mentees aren't repeated
-  # in the same module
-  
-  # Something is going wrong here.
+  count = count + 1
+}
+
+min_miss = n_miss %>% # Filter to the minimum number of missing values per try
+  mutate(min = min(n_missing, na.rm = T)) %>%
+  filter(n_missing == min) %>%
+  select(result_number)
+
+## Sanity check - remove later
+#check = result[[first(min_miss$result_number)]]
+#check$Skill = substr(check$Skill.SubSkill, 1, 3)
+#check$Skill = ff(check$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
+# Looks good up to this point - main skills are on point with what we expect.
+
+# Split rooms into two modules so that room space is maximized but mentees aren't repeated
+# in the same module
+
   # We need to arrange subskills by mentee
   dataset = 1
   result2 = list() # Store the new results
   while(dataset < (length(min_miss$result_number)+1)){
     
-    index = min_miss$result_number[dataset]
-    temp =  result[[index]]
-    
-    # Ok, so split the dupe column so no one is replicated.
-    temp$dupe = duplicated(temp$Mentee.Name)
-    temp$index = seq(1,nrow(temp),by=1)
-    n_rooms_mod1 = ceiling(nrow(temp)/2)
-    n_rooms_mod2 = nrow(temp) - n_rooms_mod1
-    
-    mod1 = temp %>%
-      filter(dupe==TRUE) %>%
-      #sample_n(n_rooms_mod1) %>%
-      mutate(mod = "Module1")
-    
-    mod2 = temp %>%
-      filter(!index %in% mod1$index) #%>%
+  index = min_miss$result_number[dataset]
+  temp =  result[[index]]
+  
+  # Ok, so split the dupe column so no one is replicated.
+  temp$dupe = duplicated(temp$Mentee.Name)
+  temp$index = seq(1,nrow(temp),by=1)
+  n_rooms_mod1 = ceiling(nrow(temp)/2)
+  n_rooms_mod2 = nrow(temp) - n_rooms_mod1
+  
+  mod1 = temp %>%
+    filter(dupe==TRUE) %>%
+    #sample_n(n_rooms_mod1) %>%
+    mutate(mod = "Module1")
+  
+  mod2 = temp %>%
+    filter(!index %in% mod1$index) #%>%
     #mutate(mod = "Module2")
-    
-    mod1_extra = mod2 %>% 
-      filter(!Mentee.Name %in% mod1$Mentee.Name) %>%
-      sample_n((n_rooms_mod1 - nrow(mod1)), replace = F) %>%
-      mutate(mod = "Module1")
-    
-    mod1 = rbind(mod1, mod1_extra)
-    
-    mod2 = temp %>%
-      filter(!index %in% mod1$index) %>%
-      mutate(mod = "Module2")
-    
-    data = rbind(mod1, mod2)
-    data = data %>% select(Skill.SubSkill, Mentee.Name, mod)
-    #table(data1$Mentee.Name, data1$mod) # Make sure we have just one mentee per module
-    
-    d = list(data)
-    result2 <- cbind(result2, d)
-    dataset = dataset + 1
-  } 
   
-  # Next we select the configuration which minimizes the number of rooms 
+  mod1_extra = mod2 %>% 
+    filter(!Mentee.Name %in% mod1$Mentee.Name) %>%
+    sample_n((n_rooms_mod1 - nrow(mod1)), replace = F) %>%
+    mutate(mod = "Module1")
   
-  count = 2
-  n_rooms = data.frame(result_number = seq(count, length(result2), by = 1),
-                       n_rooms = NA)
-  while(count < length(result2)){
-    
-    try = result2[[count]]
-    #temp = data.frame(table(try$Skill.SubSkill, try$mod))
-    temp = data.frame(table(try$Skill.SubSkill))
-    # print(temp)
-    temp = temp %>%
-      # mutate(Skill.SubSkill = as.character(Var1)) %>%
-      # mutate(mod = as.character(Var2)) %>%
-      mutate(Skill.SubSkill = Var1) %>%
-      filter(Freq>0) %>%
-      mutate(n_rooms = sum(ceiling(Freq/3))) %>%
-      #mutate(n_rooms = ceiling(n/3)) %>%
-      select(n_rooms) %>%
-      head(n=1)
-    
-    n_rooms$n_rooms[count] = temp$n_rooms
-    
-    count = count + 1
-  }
+  mod1 = rbind(mod1, mod1_extra)
   
-  min_rooms = n_rooms %>% # Filter to the minimum number of missing values per try
-    mutate(min = min(n_rooms, na.rm = T)) %>%
-    filter(n_rooms == min) %>%
-    select(result_number) %>%
+  mod2 = temp %>%
+    filter(!index %in% mod1$index) %>%
+    mutate(mod = "Module2")
+  
+  data = rbind(mod1, mod2)
+  data = data %>% select(Skill.SubSkill, Mentee.Name, mod)
+  #table(data1$Mentee.Name, data1$mod) # Make sure we have just one mentee per module
+  
+  d = list(data)
+  result2 <- cbind(result2, d)
+  dataset = dataset + 1
+} 
+  # Pick a selection which minimizes missing mentee assignments
+  min_miss = min_miss %>%
     sample_n(1)
   
-  #index = min_rooms$result_number[1]
-  
-  index = 5
-  
-  assign = data.frame(result2[[index]])
-  #### Skip the above because it's changing the skills ... 
-  # If we're going to skip, though, we still need to assign a module.
-  #assign = result[[first(min_miss$result_number)]]
+  assign = result2[[first(min_miss$result_number)]]
   
   assign = assign %>%
     group_by(mod, Skill.SubSkill) %>%
     mutate(Mentee = paste("Mentee",seq(1,n(),1),sep=".")) %>%
     ungroup()
-  
+
   assign_wide = dcast(assign, mod + Skill.SubSkill ~ Mentee, value.var ="Mentee.Name")
   if(ncol(assign_wide) ==3 ){
     new_cols = paste("Mentee",c(2,3),sep = ".")
@@ -221,28 +186,31 @@ define_modules_v4 = function(mentee_df, n_mentors) {
   }else{
     assign_wide = assign_wide
   }
-  
+
   # Just doing a sanity check here - not to leave in
   #assign_wide$Skill = substr(assign_wide$Skill.SubSkill, 1, 3)
   #assign_wide$Skill = ff(assign_wide$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
   #assign$Skill = substr(assign$Skill.SubSkill, 1, 3)
   #assign$Skill = ff(assign$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
+return(assign_wide)
   
+  }
   
+define_module_rank2 = function(rank1_module, mentee_df, n_mentors, tries = 20) {
   # And back to long with all three mentee places allocated
-  assign_long = melt(assign_wide, id.vars = c("mod","Skill.SubSkill"))
-  
+  assign_long = melt(rank1_module, id.vars = c("mod","Skill.SubSkill"))
+
   ## Now consider rank = 2 skills, so that we can assign unassigned mentees
   
   df = mentee_df[complete.cases(mentee_df)==T,]
   df$Ranking = as.numeric(df$Ranking)
-  
+    
   # Filter out mentees already assigned to both modules.
   assigned = assign %>% group_by(Mentee.Name) %>% 
     mutate(n = n()) %>%
     filter(n==2) %>%
     select(Mentee.Name) %>%
-    head(n=1) %>%
+    slice(n=1) %>%
     ungroup()
   
   # We need to consider remaining mentees per module now. First, grab the modules for which already assigned
@@ -253,7 +221,7 @@ define_modules_v4 = function(mentee_df, n_mentors) {
     mutate(mod = as.character(Var2)) %>%
     filter(Freq==0) %>%
     select(-c(Var1, Var2, Freq))
-  
+   
   unique_mentee = unique(df$Mentee.Name)
   unassigned = unique_mentee[!(unique_mentee %in% assigned$Mentee.Name)]
   no_module_assigned = unassigned[!(unassigned %in% remaining_assignments$Mentee.Name)]
@@ -287,64 +255,64 @@ define_modules_v4 = function(mentee_df, n_mentors) {
   # to ensure that everyone who may possible be assigned has a spot.
   # Set up the loop
   try = 1
-  allowable_tries = 10
+  allowable_tries = tries
   df = remaining_assignments # reset the program
   data = long_orig_na %>%
     sample_frac(1)
   result = list(data)
   count = 1
   
-  while(nrow(df) > 0 & length(result) < (allowable_tries+1)) {
-    
-    slice = rank2 %>%
-      filter(Mentee.Name %in% df$Mentee.Name & !is.na(Ranking)) %>%
-      filter(Skill.SubSkill == data$Skill.SubSkill[count]) %>%
-      sample_frac(1) %>%
-      head(n=1) %>%
-      select(Mentee.Name, Skill.SubSkill)
-    
-    # if the subskill and mentee name don't match for the module they need, continue
-    if(length(slice$Mentee.Name)==0) {
-      
-      data$Mentee.Name[count] = as.character(NA) # Assign NA
-      #df = df
-      count = count + 1
-      
-    }else{
-      
-      module_avail = data$mod[data$Skill.SubSkill == slice$Skill.SubSkill]
-      module_needed =  df$mod[df$Mentee.Name == slice$Mentee.Name]
-      match = any(module_needed %in% module_avail)
-      
-      if(match){
-        data$Mentee.Name[count] = slice$Mentee.Name # Assign mentee
-        
-        # Then drop that mentee / module combo
-        df = df %>%
-          mutate(drop = ifelse(Mentee.Name==slice$Mentee.Name & mod == data$mod[count], TRUE, FALSE)) %>%
-          filter(drop == FALSE) %>%
-          select(-drop)
-        count = count + 1 
-      }else{
-        data$Mentee.Name[count] = as.character(NA) # Assign NA
-        #df = df
-        count = count + 1
-      }
-    }
-    
-    if((count-1)==nrow(data)){
-      
-      d = list(data)
-      result <- cbind(result, d)
-      df = remaining_assignments # reset the program
-      data = long_orig_na %>%
-        sample_frac(1)
-      count = 1
-      try = try + 1
-    }
-  } # Run the loop as long until number of tries is reached
-  
-  ## See which `try` minimizes the number of non-assigned mentees when using rank <= 2.
+while(nrow(df) > 0 & length(result) < (allowable_tries+1)) {
+            
+            slice = rank2 %>%
+              filter(Mentee.Name %in% df$Mentee.Name & !is.na(Ranking)) %>%
+              filter(Skill.SubSkill == data$Skill.SubSkill[count]) %>%
+              sample_frac(1) %>%
+              slice(n=1) %>%
+              select(Mentee.Name, Skill.SubSkill)
+            
+            # if the subskill and mentee name don't match for the module they need, continue
+            if(length(slice$Mentee.Name)==0) {
+              
+              data$Mentee.Name[count] = as.character(NA) # Assign NA
+              #df = df
+              count = count + 1
+              
+            }else{
+              
+              module_avail = data$mod[data$Skill.SubSkill == slice$Skill.SubSkill]
+              module_needed =  df$mod[df$Mentee.Name == slice$Mentee.Name]
+              match = any(module_needed %in% module_avail)
+              
+              if(match){
+              data$Mentee.Name[count] = slice$Mentee.Name # Assign mentee
+            
+              # Then drop that mentee / module combo
+              df = df %>%
+                mutate(drop = ifelse(Mentee.Name==slice$Mentee.Name & mod == data$mod[count], TRUE, FALSE)) %>%
+                filter(drop == FALSE) %>%
+                select(-drop)
+              count = count + 1 
+              }else{
+                data$Mentee.Name[count] = as.character(NA) # Assign NA
+                #df = df
+                count = count + 1
+              }
+            }
+            
+            if((count-1)==nrow(data)){
+              
+              d = list(data)
+              result <- cbind(result, d)
+              df = remaining_assignments # reset the program
+              data = long_orig_na %>%
+                sample_frac(1)
+              count = 1
+              try = try + 1
+            }
+          } # Run the loop as long until number of tries is reached
+
+## See which `try` minimizes the number of non-assigned mentees when using rank <= 2.
   count = 1
   n_miss = data.frame(result_number = seq(1, length(result), by = 1),
                       n_missing = NA)
@@ -378,9 +346,13 @@ define_modules_v4 = function(mentee_df, n_mentors) {
   #assign_long_2$Skill = substr(assign_long_2$Skill.SubSkill, 1, 3)
   #assign_long_2$Skill = ff(assign_long_2$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
   #table(assign_long_2$Mentee.Name, assign_long_2$mod)
+ return(assign_long_2)
+   
+}  
   
+define_module_rank3 = function(rank2_module, mentee_df, n_mentors, tries = 20) {
   ################ Rank 3
-  remaining_assignments = data.frame(table(assign_long_2$Mentee.Name, assign_long_2$mod))
+  remaining_assignments = data.frame(table(rank2_module$Mentee.Name, rank2_module$mod))
   remaining_assignments = remaining_assignments %>%
     mutate(Mentee.Name = as.character(Var1)) %>%
     mutate(mod = as.character(Var2)) %>%
@@ -388,7 +360,7 @@ define_modules_v4 = function(mentee_df, n_mentors) {
     select(-c(Var1, Var2, Freq))
   
   unique_mentee = unique(df$Mentee.Name)
-  unassigned = unique_mentee[!(unique_mentee %in% assign_long_2$Mentee.Name)]
+  unassigned = unique_mentee[!(unique_mentee %in% rank2_module$Mentee.Name)]
   no_module_assigned = unassigned[!(unassigned %in% remaining_assignments$Mentee.Name)]
   
   extra_rows = data.frame(Mentee.Name = rep(no_module_assigned, times = 2),
@@ -401,24 +373,24 @@ define_modules_v4 = function(mentee_df, n_mentors) {
     filter(Ranking<=3) %>%
     filter(Mentee.Name %in% remaining_assignments$Mentee.Name)
   
-  long_orig_na = assign_long_2 %>% filter(is.na(Mentee.Name))
+  long_orig_na = rank2_module %>% filter(is.na(Mentee.Name))
   
   # Set up the loop
   try = 1
-  allowable_tries = 100
+  allowable_tries = tries
   df = remaining_assignments # reset the program
   data = long_orig_na %>%
     sample_frac(1)
   result = list(data)
   count = 1
   
-  while(nrow(df) > 0 & length(result) < (allowable_tries+1)) {
+while(nrow(df) > 0 & length(result) < (allowable_tries+1)) {
     
     slice = rank3 %>%
       filter(Mentee.Name %in% df$Mentee.Name & !is.na(Ranking)) %>%
       filter(Skill.SubSkill == data$Skill.SubSkill[count]) %>%
       sample_frac(1) %>%
-      head(n=1) %>%
+      slice(n=1) %>%
       select(Mentee.Name, Skill.SubSkill)
     
     # if the subskill and mentee name don't match for the module they need, continue
@@ -434,7 +406,7 @@ define_modules_v4 = function(mentee_df, n_mentors) {
       module_needed =  df$mod[df$Mentee.Name == slice$Mentee.Name]
       match = any(module_needed %in% module_avail)
       
-      if(match){
+      if(match==TRUE){
         data$Mentee.Name[count] = slice$Mentee.Name # Assign mentee
         
         # Then drop that mentee / module combo
@@ -481,7 +453,7 @@ define_modules_v4 = function(mentee_df, n_mentors) {
     sample_n(1)
   
   rank_3_assignments = result[[min_miss$result_number]] # Keep this assignment
-  
+
   #rank_3_assignments$Skill = substr(rank_3_assignments$Skill.SubSkill, 1, 3)
   #rank_3_assignments$Skill = ff(rank_3_assignments$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
   
@@ -490,18 +462,29 @@ define_modules_v4 = function(mentee_df, n_mentors) {
   # Rbind the rank 3 and above results with the assign_long dataframe
   
   if(length(unique(rank_3_assignments$Mentee.Name)) >1){
-    bind1 = assign_long_2 %>% filter(!is.na(Mentee.Name)) # Select those already assigned
-    assign_long_3 = rbind(bind1, rank_3_assignments) # Add those just assigned by rank 3 or less
+  bind1 = assign_long_2 %>% filter(!is.na(Mentee.Name)) # Select those already assigned
+  assign_long_3 = rbind(bind1, rank_3_assignments) # Add those just assigned by rank 3 or less
   } else{
     
     assign_long_3 = assign_long_2
   }
-  table(assign_long_3$Mentee.Name, assign_long_3$mod)
+  #table(assign_long_3$Mentee.Name, assign_long_3$mod)
   
   #assign_long_3$Skill = substr(assign_long_3$Skill.SubSkill, 1, 3)
   #assign_long_3$Skill = ff(assign_long_3$Skill, as.character(skills_map$SK),  as.character(skills_map$character_name), ignore.case = T)
   
+  assign_long_3 = assign_long_3 %>%
+    group_by(mod, Mentee.Name) %>%
+    slice(n=1) %>%
+    ungroup()
+   
+     
+  assign_wide_3 = dcast(assign_long_3, mod + Skill.SubSkill ~ Mentee, value.var ="Mentee.Name")
+  return(assign_wide_3)
   
+}
+  
+assign_remaining= function(rank3_module, mentee_df, n_mentors, tries = 20) {
   ##### After all ranks have been considered
   remaining_assignments = data.frame(table(assign_long_3$Mentee.Name, assign_long_3$mod))
   remaining_assignments = remaining_assignments %>%
@@ -511,31 +494,31 @@ define_modules_v4 = function(mentee_df, n_mentors) {
     select(-c(Var1, Var2, Freq))
   
   n_rooms_mod = assign_long_3 %>% group_by(mod) %>%
-    mutate(n_rooms = n()/3) %>%
-    head(n=1) %>%
+    mutate(n_rooms = ceiling(n()/3)) %>%
+    slice(n=1) %>%
     ungroup() %>%
     select(mod, n_rooms) %>%
     mutate(avail_rooms = n_mentors - n_rooms)
-  
+    
   
   ## Finally, go back and create new rooms based on mentees who have not been assigned
   
-  # Where are new rooms needed? 
+    # Where are new rooms needed? 
   space_needed = remaining_assignments %>% group_by(mod) %>% mutate(n_spaces = n()) %>%
     mutate(n_rooms = ceiling(n_spaces/3))%>% ungroup()
   
-  # Where are new rooms available?
+    # Where are new rooms available?
   assign_wide_3 = dcast(assign_long_3, mod + Skill.SubSkill ~ Mentee, value.var ="Mentee.Name")
   rooms = data.frame(table(assign_wide_3$mod))
-  
+
   # Assign mentees to the available spaces
   
   # First determine which of their main skills they're not assigned to yet.
   already_assigned = assign_long_3 %>%
     filter(Mentee.Name %in% remaining_assignments$Mentee.Name) %>%
     mutate(Skill = substr(Skill.SubSkill, 1, 3))
-  
-  # find commonalities in their skill interests
+
+    # find commonalities in their skill interests
   slice = mentee_df %>% filter(Mentee.Name %in% remaining_assignments$Mentee.Name & !is.na(Ranking)) 
   # If mentees to be assigned are already considered for one module, 
   # make sure they are not considered for the same skill ...
@@ -550,27 +533,22 @@ define_modules_v4 = function(mentee_df, n_mentors) {
     
   }
   
+  
   max_skills = slice %>%
-    group_by(Mentee.Name, Skill.SubSkill) %>%
-    summarise(n = n())  %>%    #arrange(desc(n)) %>%
-    arrange(desc(n)) # %>%
-   # head(n=1) # %>% 
-    # select(Mentee.Name,Skill.SubSkill)
+    group_by(Skill.SubSkill) %>%
+    mutate(n = n()) 
   
-  print(max_skills)
+    #arrange(desc(n)) %>%
+    #slice(n=1) %>%
+    #select(Skill.SubSkill)
   
-  # slice_skill = slice %>%
-  #   filter(Skill.SubSkill == max_skills$Skill.SubSkill) %>%
-  #   select(-n)
-  
-#   slice_skill <- slice_skill %>% left_join(max_skills, by = c("Mentee.Name","Skill.SubSkill" ))
+  slice_skill = slice %>%
+    filter(Skill.SubSkill == max_skills$Skill.SubSkill) #%>%
+    #select(-n)
   
   slice_skill = max_skills %>% filter(n > 1) %>% select(Skill.SubSkill, Mentee.Name)
   slice_skill1 = slice %>% filter(!Mentee.Name %in% slice_skill$Mentee.Name) %>% 
     filter(Ranking==1) %>% slice(n=1)
-  
-  print(slice_skill)
-  print(slice_skill1)
   
   slice_skill = rbind(slice_skill, slice_skill1)
   
@@ -789,6 +767,6 @@ select_mentors_v3= function(mentor_pref_df, modules_defined) {
   brs_long = brs_long[complete.cases(brs_long)==T,]
   
   brs_long1 = merge(modules_defined, brs_long, by = c("breakout_room","mod","Skill"))
-  
+    
   return(brs_long1)
 }

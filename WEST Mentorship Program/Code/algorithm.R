@@ -1,3 +1,6 @@
+setwd("~/Desktop/mentor_optimization/opt.v4")
+.libPaths( c("~/rlibraries", .libPaths()))
+
 ###--------------------------------------------------------------### 
 ###  WEST Mentorship Program - Mentor Mentee Matching Algorithm  ###
 ###--------------------------------------------------------------### 
@@ -10,16 +13,16 @@ pacman::p_load(reshape2, dplyr, survey, purrr, tidyr, lubridate, readxl,here, gt
 source("helper_functions.R")
 
 # Read in the variable inputs from Shiny
-session_date = input$week               # Session Date for the optimization
-optimize_mentors = input$opt_mentors    # Optimize the number of mentors, or use all available mentors?
+#session_date = input$week               # Session Date for the optimization
+#optimize_mentors = input$opt_mentors    # Optimize the number of mentors, or use all available mentors?
 
 max_mentees = input$max_mentees
 min_mentees = input$min_mentees
 
-# session_date = "2021-03-23" # Session Date for the optimization
-# optimize_mentors = FALSE    # Optimize the number of mentors, or use all available mentors?
-# max_mentees = 3
-# min_mentees = 1
+ #session_date = "2021-03-23" # Session Date for the optimization
+ #optimize_mentors = FALSE    # Optimize the number of mentors, or use all available mentors?
+ #max_mentees = 3
+ #min_mentees = 1
 
 
 ## DATA PREP ----
@@ -136,8 +139,11 @@ mentee_long = mentee_long %>%
   filter(drop==FALSE) %>%
   select(-c(extra_ss, n_rank, dupe, drop))
 
-module_breakout_ss = define_modules_v4(mentee_long, n_mentors)
-module_breakout_ss$Skill = substr(module_breakout_ss$Skill.SubSkill, 1, 3)
+rank1_module_ss = define_module_rank1(mentee_long, n_mentors, tries = 20)
+rank2_module_ss = define_module_rank2(rank1_module_ss, mentee_long, n_mentors, tries = 20)
+rank3_module_ss = define_module_rank3(rank2_module_ss, mentee_long, n_mentors, tries = 20)
+
+rank3_module_ss$Skill = substr(rank3_module_ss$Skill.SubSkill, 1, 3)
 
 # Determine which mentors to select based on module topics
 # and number of breakout rooms needed per topic.
@@ -151,10 +157,9 @@ mentor_preferences = mentor_long %>%
 
 
 # Assign mentors to modules + breakout rooms by interest + experience
-assignments = select_mentors_v3(mentor_preferences, module_breakout_ss) # This will take some time to run as it searches for the best mentor / module combinations.
+assignments = select_mentors_v3(mentor_preferences, rank3_module_ss) # This will take some time to run as it searches for the best mentor / module combinations.
 
 # Arrange by module and breakout room
-#assignments = brs_long1
 assignments = assignments %>% arrange(mod, breakout_room) %>% 
   select(Module = mod, Breakout_Room = breakout_room, Mentor.Name = mentor,
          Skill = Skill, SubSkill = Skill.SubSkill,
