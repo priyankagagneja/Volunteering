@@ -1,0 +1,23 @@
+question,option,input_type,input_id,dependence,dependence_value,required
+Your Name,,text,name,NA,NA,TRUE
+What is your #1 topic of interest?,"Career Progression (Mentors/Coaches/Sponsors, Professional Networks, Strategies for Advancement, Project Management, Decision-Making, Being Innovative, Taking Risks)",mc,topic1,NA,NA,TRUE
+What is your #1 topic of interest?,"Entrepreneurship (Creating a Business Vision, Business Plan & Pitch, Decision-Making, Innovation, Risk-Taking, Legal, Promotion/Marketing, Finances, Venture Capital, Angel Investors, Measuring Success, Exit Strategy)",mc,topic1,NA,NA,TRUE
+What is your #1 topic of interest?,"Interpersonal Relationships (Networking, Conversational Intelligence, Office Politics/Corporate Culture) Active Listening, Cross-Cultural Dynamics)",mc,topic1,NA,NA,TRUE
+What is your #1 topic of interest?,"Leadership: Personal (Planning, Execution, Analysis, Effectiveness & Efficiency, Influence, Adaptability, Unconscious Bias, Milestone Focus, Budget Management)",mc,topic1,NA,NA,TRUE
+What is your #1 topic of interest?,"Leadership: Team (Relationship Building, Inclusion, Communication, Collaboration, Motivation, Managing, Delivery, Performance Metrics, People Development, Diversity, Corporate Alignment)",mc,topic1,NA,NA,TRUE
+What is your #1 topic of interest?,"Leadership: Strategic (Strategic Thinking, Business Knowledge, Big Picture, Vision and Mission, Global Perspective, Financial Acumen, Innovation, Company Priorities, Stakeholder Awareness, Due Diligence)",mc,topic1,NA,NA,TRUE
+What is your #1 topic of interest?,"Personal Growth (Self-Advocacy, Confidence Building, Professional Presence, Personal Vision/Branding, Presentations, Adaptability, Negotiation)",mc,topic1,NA,NA,TRUE
+What is your #1 topic of interest?,"Transition (Resilience, Organizational Change, Personal Change, Networking, LinkedIn & Public Presence, Values Assessment, Alternative Careers, Interviewing, Negotiation, To MBA or Not to MBA, Bridging Work Gaps, Decision-Making, Positive Energy)",mc,topic1,NA,NA,TRUE
+What is your #1 topic of interest?,"Work-Life Considerations (Personal and Professional Goals, Time management, Stress Management, Handling Information Overload, Re-visioning, Investing & Wealth Management, Life Coaching)",mc,topic1,NA,NA,TRUE
+Rank skills on 1st topic of interest,,mc,skills_topic1,topic1,,TRUE
+What is your #2 topic of interest?,"Career Progression (Mentors/Coaches/Sponsors, Professional Networks, Strategies for Advancement, Project Management, Decision-Making, Being Innovative, Taking Risks)",mc,topic2,NA,NA,TRUE
+What is your #2 topic of interest?,"Entrepreneurship (Creating a Business Vision, Business Plan & Pitch, Decision-Making, Innovation, Risk-Taking, Legal, Promotion/Marketing, Finances, Venture Capital, Angel Investors, Measuring Success, Exit Strategy)",mc,topic2,NA,NA,TRUE
+What is your #2 topic of interest?,"Interpersonal Relationships (Networking, Conversational Intelligence, Office Politics/Corporate Culture) Active Listening, Cross-Cultural Dynamics)",mc,topic2,NA,NA,TRUE
+What is your #2 topic of interest?,"Leadership: Personal (Planning, Execution, Analysis, Effectiveness & Efficiency, Influence, Adaptability, Unconscious Bias, Milestone Focus, Budget Management)",mc,topic2,NA,NA,TRUE
+What is your #2 topic of interest?,"Leadership: Team (Relationship Building, Inclusion, Communication, Collaboration, Motivation, Managing, Delivery, Performance Metrics, People Development, Diversity, Corporate Alignment)",mc,topic2,NA,NA,TRUE
+What is your #2 topic of interest?,"Leadership: Strategic (Strategic Thinking, Business Knowledge, Big Picture, Vision and Mission, Global Perspective, Financial Acumen, Innovation, Company Priorities, Stakeholder Awareness, Due Diligence)",mc,topic2,NA,NA,TRUE
+What is your #2 topic of interest?,"Personal Growth (Self-Advocacy, Confidence Building, Professional Presence, Personal Vision/Branding, Presentations, Adaptability, Negotiation)",mc,topic2,NA,NA,TRUE
+What is your #2 topic of interest?,"Transition (Resilience, Organizational Change, Personal Change, Networking, LinkedIn & Public Presence, Values Assessment, Alternative Careers, Interviewing, Negotiation, To MBA or Not to MBA, Bridging Work Gaps, Decision-Making, Positive Energy)",mc,topic2,NA,NA,TRUE
+What is your #2 topic of interest?,"Work-Life Considerations (Personal and Professional Goals, Time management, Stress Management, Handling Information Overload, Re-visioning, Investing & Wealth Management, Life Coaching)",mc,topic2,NA,NA,TRUE
+Rank skills on 2nd topic of interest,,mc,skills_topic2,topic2,,TRUE
+Feedback you want to share,,text,feedback,NA,NA,FALSE
