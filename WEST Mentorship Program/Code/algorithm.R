@@ -1,6 +1,3 @@
-setwd("~/Desktop/mentor_optimization/opt.v4")
-.libPaths( c("~/rlibraries", .libPaths()))
-
 ###--------------------------------------------------------------### 
 ###  WEST Mentorship Program - Mentor Mentee Matching Algorithm  ###
 ###--------------------------------------------------------------### 
@@ -31,7 +28,7 @@ min_mentees = input$min_mentees
 mentee = read.csv(input$menteeSurvey$datapath, stringsAsFactors = F)
 mentor = read.csv(input$mentorSurvey$datapath, stringsAsFactors = F, skip = 1, header = T)
 mentor_schedule = read.csv(input$mentorAvailability$datapath, stringsAsFactors = F)
-# subskill_map = read.csv(file = "Data/subskill_map.csv", stringsAsFactors = F)
+subskill_map = read.csv(input$subSkillMap$datapath, stringsAsFactors = F)
 
 # mentee = read.csv("Data/latest_mentee.csv", stringsAsFactors = F)
 # mentor = read.csv("Data/mentor_realistic.csv", stringsAsFactors = F, skip = 1, header = T)
